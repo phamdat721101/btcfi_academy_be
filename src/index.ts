@@ -144,4 +144,4 @@ if (process.env.VERCEL !== '1') {
 }
 
 // Vercel handler export
-export default app;
+module.exports = app;
