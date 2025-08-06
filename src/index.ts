@@ -14,7 +14,7 @@ app.use(express.json());
 const bluefinService = new BluefinService();
 const flowxService = new FlowxService();
 
-app.get('/', async (req, res) => {
+app.get('/api/', async (req, res) => {
   res.json("Hello Nim");
 });
 
