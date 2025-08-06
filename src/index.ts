@@ -135,8 +135,13 @@ app.get('/api/liquidity-positions', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Pool Service API running on port ${PORT}`);
-});
+// Only start server if not running in Vercel (local dev)
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Pool Service API running on port ${PORT}`);
+  });
+}
+
+// Vercel handler export
 export default app;
