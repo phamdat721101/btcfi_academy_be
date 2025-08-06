@@ -15,9 +15,11 @@
   "dependencies": {
     "@firefly-exchange/library-sui": "^2.6.19",
     "@flowx-finance/sdk": "^1.11.0",
+    "@supabase/supabase-js": "^2.53.0",
     "@types/node": "^24.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
+    "ethers": "^6.15.0",
     "express": "^5.1.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3"

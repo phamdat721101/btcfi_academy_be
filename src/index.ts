@@ -3,135 +3,153 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import { BluefinService } from './bluefinService';
 import { FlowxService } from './flowxService';
+import { PayToLearnService } from './payToLearnService';
+import { TransactionService } from './transactionService';
 
 dotenv.config();
 
 const app = express();
-// Allow CORS for all origins
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 
 const bluefinService = new BluefinService();
 const flowxService = new FlowxService();
+const payToLearnService = new PayToLearnService();
+const transactionService = new TransactionService();
 
 app.get('/api/', async (req, res) => {
   res.json("Hello Nim");
 });
 
-app.get('/api/bluefin/liquidity-positions', async (req, res) => {
-  const address = req.query.address as string;
-  if (!address) {
-    res.status(400).json({ error: 'Missing wallet address' });
-    return;
-  }
+// Create a package
+app.post('/api/pay/package', async (req, res) => {
   try {
-    const positions = await bluefinService.getLiquidityPositionsByWallet(address);
-    res.json(positions);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch liquidity positions', details: error });
+    const { id, priceWei, name, ipfsHash } = req.body;
+    const result = await payToLearnService.createPackage({ id, priceWei, name, ipfsHash });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to create package', details: err });
   }
 });
 
-app.get('/api/flowx/liquidity-positions', async (req, res) => {
-  const address = req.query.address as string;
-  if (!address) {
-    res.status(400).json({ error: 'Missing wallet address' });
-    return;
-  }
+// Update a package
+app.put('/api/pay/package/:id', async (req, res) => {
   try {
-    const positions = await flowxService.getLiquidityPositionsByWallet(address);
-    // Serialize only the necessary data (e.g., toJSON or pick fields)
-    const safePositions = JSON.parse(JSON.stringify(positions, (key, value) => {
-      // Remove problematic properties or filter as needed
-      if (typeof value === 'object' && value !== null && value.constructor && value.constructor.name === 'SuiClient') {
-        return undefined;
-      }
-      return value;
-    }));
-    res.json(safePositions);
-  } catch (error) {
-    console.error('Error fetching liquidity positions:', error);
-    res.status(500).json({ error: 'Failed to fetch liquidity positions', details: error });
+    const result = await payToLearnService.updatePackage(req.params.id, req.body);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to update package', details: err });
   }
 });
 
-app.get('/api/flowx/position-value', async (req, res) => {
-  const address = req.query.address as string;
-  if (!address) {
-    res.status(400).json({ error: 'Missing wallet address' });
-    return;
-  }
+// Delete a package
+app.delete('/api/pay/package/:id', async (req, res) => {
   try {
-    const value = await flowxService.estimateTotalProfit(address);
-    res.json(JSON.parse(JSON.stringify(value, (key, value) => {
-      // Remove problematic properties or filter as needed
-      if (typeof value === 'object' && value !== null && value.constructor && value.constructor.name === 'SuiClient') {
-        return undefined;
-      }
-      return value;
-    })));  
-  } catch (error) {
-    console.error('Error fetching position value:', error);
-    res.status(500).json({ error: 'Failed to fetch position value', details: error });
+    const result = await payToLearnService.deletePackage(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to delete package', details: err });
   }
 });
 
-// Get market data for a specific pool contract
-app.get('/api/pools/:pool_address/stats', async (req, res) => {
-  const poolId = req.params.pool_address;
-  const source = req.query.source as string || 'bluefin'; // 'bluefin' or 'flowx'
+// Get all packages
+app.get('/api/pay/packages', async (req, res) => {
   try {
-    let stats;
-    if (source === 'flowx') {
-      stats = await flowxService.getPoolById(poolId);
-    } else {
-      stats = await bluefinService.getPoolDetail(poolId);
-    }
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch pool stats', details: error instanceof Error ? error.message : error });
+    const packages = await payToLearnService.getAvailablePackages();
+    res.json(packages);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch packages', details: err });
   }
 });
 
-// Get data for multiple pool contracts (POST with pool address array)
-app.post('/api/pools/batch', async (req, res) => {
-  const { poolIds, source } = req.body;
-  if (!Array.isArray(poolIds) || poolIds.length === 0) {
-    res.status(400).json({ error: 'poolIds must be a non-empty array' });
-    return;
-  }
+app.get('/api/pay/package/:id', async (req, res) => {
   try {
-    let stats;
-    if (source === 'flowx') {
-      stats = await flowxService.getBatchPoolStats(poolIds);
-    } else {
-      stats = await bluefinService.getBatchPoolStats(poolIds);
-    }
-    res.json(stats);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch batch pool stats', details: error instanceof Error ? error.message : error });
+    const pkg = await payToLearnService.getPackage(req.params.id);
+    res.json(pkg);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch package', details: err });
   }
 });
 
-app.get('/api/liquidity-positions', async (req, res) => {
-  const address = req.query.address as string;
-  if (!address) {
-    res.status(400).json({ error: 'Missing wallet address' });
-    return;
-  }
+// Select style
+app.post('/api/pay/user/:address/style', async (req, res) => {
   try {
-    // Fetch from both services in parallel
-    const [bluefinPositions, flowxPositions] = await Promise.all([
-      bluefinService.getLiquidityPositionsByWallet(address),
-      flowxService.getLiquidityPositionsByWallet(address)
-    ]);
-    res.json({
-      bluefin: bluefinPositions,
-      flowx: flowxPositions
-    });
-  } catch (error) {
-    console.error('Error fetching combined liquidity positions:', error);
-    res.status(500).json({ error: 'Failed to fetch combined liquidity positions', details: error });
+    const { style } = req.body;
+    const result = await payToLearnService.selectStyle(req.params.address, style);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to select style', details: err });
+  }
+});
+
+// Get user style
+app.get('/api/pay/user/:address/style', async (req, res) => {
+  try {
+    const style = await payToLearnService.getUserStyle(req.params.address);
+    res.json({ style });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user style', details: err });
+  }
+});
+
+// Log a user purchase
+app.post('/api/pay/user/:address/purchase', async (req, res) => {
+  try {
+    const { packageId, priceWei, txHash, style, ipfsHash, packageName } = req.body;
+    const tx = {
+      user_address: req.params.address,
+      package_id: packageId,
+      pricewei: priceWei,
+      tx_hash: txHash,
+      timestamp: new Date().toISOString(),
+      style,
+      ipfshash:ipfsHash,
+      packagename:packageName,
+    };
+    const result = await payToLearnService.logPurchase(tx);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to log purchase', details: err });
+  }
+});
+
+// Get purchased packages for a user
+app.get('/api/pay/user/:address/purchases', async (req, res) => {
+  try {
+    const ids = await payToLearnService.getPurchasedPackages(req.params.address);
+    res.json(ids);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user purchases', details: err });
+  }
+});
+
+// Check if user has purchased a package
+app.get('/api/pay/user/:address/hasPurchased/:packageId', async (req, res) => {
+  try {
+    const purchased = await payToLearnService.hasPurchased(req.params.address, req.params.packageId);
+    res.json({ purchased });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to check purchase', details: err });
+  }
+});
+
+// Get all transactions for a user
+app.get('/api/pay/user/:address/transactions', async (req, res) => {
+  try {
+    const txs = await transactionService.getUserTransactions(req.params.address);
+    res.json(txs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch user transactions', details: err });
+  }
+});
+
+// Get all transactions (admin)
+app.get('/api/pay/transactions', async (req, res) => {
+  try {
+    const txs = await transactionService.getAllTransactions();
+    res.json(txs);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch transactions', details: err });
   }
 });
 
@@ -143,5 +161,4 @@ if (process.env.VERCEL !== '1') {
   });
 }
 
-// Vercel handler export
 export default app;
